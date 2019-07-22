@@ -1,3 +1,5 @@
+#include <boost/thread.hpp>
+#include <chrono>
 #include <cstring>
 #include <ros/ros.h>
 #include <std_msgs/Int16.h>
@@ -23,18 +25,17 @@ VL53L0X_RangingMeasurementData_t SensorsRangingMeasurementData[NUM_SENSORS];
 std_msgs::Int16 sensor_msg_array[NUM_SENSORS];
 int i2c_bus_instance;
 std::string i2c_bus_path;
+ros::Publisher sensor_pub_array[NUM_SENSORS];
 
 void initialize() {
   for (int i = 0; i < NUM_SENSORS; i++)
     VL53L0X_XSHUT_MCP23xx_IO[i] = i;
 
-  for (int i = 0, j = 0x21; i < NUM_SENSORS; j++, i++) {
+  for (int i = 0, j = 0x21; i < NUM_SENSORS; j++, i++)
     VL53L0X_ADDR[i] = j;
-  }
 
-  for (int i = 0; i < NUM_SENSORS; i++) {
+  for (int i = 0; i < NUM_SENSORS; i++)
     pSensors[i] = &Sensors[i];
-  }
 }
 
 uint32_t refSpadCount;
@@ -96,11 +97,45 @@ void Sensor_Calibration(VL53L0X_Dev_t *pDevice) {
   VL53L0X_SetVcselPulsePeriod(pDevice, VL53L0X_VCSEL_PERIOD_FINAL_RANGE, 14);
 }
 
-void Start_Ranging(int i) {
-
-  VL53L0X_PerformSingleRangingMeasurement(pSensors[i],
-                                          &SensorsRangingMeasurementData[i]);
-  sensor_msg_array[i].data = SensorsRangingMeasurementData[i].RangeMilliMeter;
+void thread1() {
+  while (ros::ok()) {
+    // auto start = std::chrono::high_resolution_clock::now();
+    VL53L0X_PerformSingleRangingMeasurement(pSensors[0],
+                                            &SensorsRangingMeasurementData[0]);
+    // auto finish = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> elapsed = finish - start;
+    // ROS_INFO("--time taken for measurement: --%f",elapsed.count());
+    sensor_msg_array[0].data = SensorsRangingMeasurementData[0].RangeMilliMeter;
+    sensor_pub_array[0].publish(sensor_msg_array[0]);
+    ros::spinOnce();
+  }
+}
+void thread2() {
+  while (ros::ok()) {
+    VL53L0X_PerformSingleRangingMeasurement(pSensors[1],
+                                            &SensorsRangingMeasurementData[1]);
+    sensor_msg_array[1].data = SensorsRangingMeasurementData[1].RangeMilliMeter;
+    sensor_pub_array[1].publish(sensor_msg_array[1]);
+    ros::spinOnce();
+  }
+}
+void thread3() {
+  while (ros::ok()) {
+    VL53L0X_PerformSingleRangingMeasurement(pSensors[2],
+                                            &SensorsRangingMeasurementData[2]);
+    sensor_msg_array[2].data = SensorsRangingMeasurementData[2].RangeMilliMeter;
+    sensor_pub_array[2].publish(sensor_msg_array[2]);
+    ros::spinOnce();
+  }
+}
+void thread4() {
+  while (ros::ok()) {
+    VL53L0X_PerformSingleRangingMeasurement(pSensors[3],
+                                            &SensorsRangingMeasurementData[3]);
+    sensor_msg_array[3].data = SensorsRangingMeasurementData[3].RangeMilliMeter;
+    sensor_pub_array[3].publish(sensor_msg_array[3]);
+    ros::spinOnce();
+  }
 }
 
 int main(int argc, char **argv) {
@@ -111,8 +146,6 @@ int main(int argc, char **argv) {
   nh.getParam("/measure_proximity_node/i2c_bus_instance", i2c_bus_instance);
   ROS_INFO("i2c_bus_instance: %d", i2c_bus_instance);
   i2c_bus_path = "/dev/i2c-" + std::to_string(i2c_bus_instance);
-
-  ros::Publisher sensor_pub_array[NUM_SENSORS];
   std::string name = "sensor_data_";
   for (int i = 0; i < NUM_SENSORS; i++) {
     std::string result = name + std::to_string(i + 1);
@@ -126,13 +159,14 @@ int main(int argc, char **argv) {
   for (int i = 0; i < NUM_SENSORS; i++) {
     Sensor_Calibration(pSensors[i]);
   }
-  while (ros::ok()) {
-    for (int i = 0; i < NUM_SENSORS; i++) {
-      Start_Ranging(i);
-      sensor_pub_array[i].publish(sensor_msg_array[i]);
-      ros::spinOnce();
-    }
-  }
+
+  ros::AsyncSpinner spinner(4); // Use 4 threads
+  spinner.start();
+  boost::thread(boost::bind(thread1));
+  boost::thread(boost::bind(thread2));
+  boost::thread(boost::bind(thread3));
+  boost::thread(boost::bind(thread4));
+  ros::waitForShutdown();
 
   VL53L0X_i2c_close();
 

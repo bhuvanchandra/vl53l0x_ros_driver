@@ -1,6 +1,6 @@
 <launch>
 	<arg name="i2c_bus_instance" default="10"/>
-	<node pkg="vl53l0x_driver" type="measure_proximity_node" name="measure_proximity_node" >
+	<node pkg="vl53l0x_driver" type="measure_proximity_node" name="measure_proximity_node" output="screen">
 	<param name="i2c_bus_instance" value="$(arg i2c_bus_instance)"/>
   	</node>
 </launch>
